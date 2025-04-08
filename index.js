@@ -73,28 +73,25 @@ app.get('/auth/google/callback',
 
 app.get('/profile', (req, res) => {
   if (!req.isAuthenticated()) {
-    console.log('Not authenticated, redirecting');
-    return res.redirect('/');
+    return res.status(401).json({ message: 'User not authenticated' });
   }
-  
-  console.log('User profile:', req.user);
-  res.send(`
-    <h1>Profile</h1>
-    <p>Welcome, ${req.user.displayName}!</p>
-    <p>Email: ${req.user.emails?.[0]?.value || 'No email'}</p>
-    ${req.user.photos?.[0]?.value ? `<img src="${req.user.photos[0].value}" alt="Profile" width="100">` : ''}
-    <a href="/logout">Logout</a>
-  `);
+
+  const { displayName, emails, photos } = req.user;
+  res.json({
+    name: displayName,
+    email: emails?.[0]?.value || null,
+    photo: photos?.[0]?.value || null
+  });
 });
 
+// Logout route
 app.get('/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) { 
-      console.error('Logout error:', err);
-      return res.status(500).send('Logout failed');
+  req.logout(err => {
+    if (err) {
+      return res.status(500).json({ message: 'Logout failed', error: err });
     }
-    console.log('User logged out');
-    res.redirect('/');
+    res.clearCookie('connect.sid');
+    res.json({ message: 'User logged out successfully' });
   });
 });
 
