@@ -1,107 +1,77 @@
-require('dotenv').config();
-const express = require('express');
-const session = require('express-session');
-const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-
+const express = require("express");
 const app = express();
+const port = 3000;
+const cors =require("cors");
+app.use(cors());
+// Middleware
+app.use(express.json());
 
-// Debug environment variables
-console.log('Environment Variables:', {
-  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? 'exists' : 'missing',
-  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? 'exists' : 'missing',
-  SESSION_SECRET: process.env.SESSION_SECRET ? 'exists' : 'missing'
-});
+// Activity level multipliers
+const activityLevels = {
+  "1": { label: "Sedentary", multiplier: 1.2 },
+  "2": { label: "Lightly active", multiplier: 1.375 },
+  "3": { label: "Moderately active", multiplier: 1.55 },
+  "4": { label: "Very active", multiplier: 1.725 },
+  "5": { label: "Super active", multiplier: 1.9 },
+};
 
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'fallback_secret',
-  resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false } // Set to true if using HTTPS
-}));
-
-// Initialize Passport
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Passport Google OAuth configuration
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "https://testingtrifit.onrender.com/auth/google/callback",
-    passReqToCallback: true
-  },
-  (req, accessToken, refreshToken, profile, done) => {
-    console.log('Google Profile:', profile);
-    return done(null, profile);
+// BMR calculation using US units
+function calculateBMR(gender, weightLbs, heightInches, age) {
+  if (gender === "male") {
+    return 66 + (6.23 * weightLbs) + (12.7 * heightInches) - (6.8 * age);
+  } else {
+    return 655 + (4.35 * weightLbs) + (4.7 * heightInches) - (4.7 * age);
   }
-));
+}
 
-// Serialize and deserialize user
-passport.serializeUser((user, done) => {
-  console.log('Serializing user:', user.id);
-  done(null, user);
-});
+function calculateTDEE(bmr, multiplier) {
+  return bmr * multiplier;
+}
 
-passport.deserializeUser((user, done) => {
-  console.log('Deserializing user:', user.id);
-  done(null, user);
-});
+function calorieRecommendations(tdee) {
+  return {
+    maintain: Math.round(tdee),
+    mildLoss: Math.round(tdee - 250),
+    weightLoss: Math.round(tdee - 500),
+    mildGain: Math.round(tdee + 250),
+    weightGain: Math.round(tdee + 500),
+  };
+}
 
-// Routes
-app.get('/', (req, res) => {
-  res.send('<h1>Home</h1><a href="/auth/google">Login with Google</a>');
-});
+// POST route to calculate TDEE
+app.post("/api/tdee", (req, res) => {
+  const { age, gender, height, weight, activityLevel } = req.body;
 
-app.get('/auth/google',
-  passport.authenticate('google', { 
-    scope: ['profile', 'email'],
-    prompt: 'select_account' // Forces account selection
-  })
-);
-
-app.get('/auth/google/callback', 
-  passport.authenticate('google', { 
-    failureRedirect: '/',
-    failureMessage: true
-  }),
-  (req, res) => {
-    console.log('Authentication successful');
-    res.redirect('/profile');
-  }
-);
-
-app.get('/profile', (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ message: 'User not authenticated' });
+  // Basic validation
+  if (!age || !gender || !height || !weight || !activityLevel) {
+    return res.status(400).json({ error: "Please provide all required fields." });
   }
 
-  const { displayName, emails, photos } = req.user;
+  const activity = activityLevels[activityLevel];
+  if (!activity) {
+    return res.status(400).json({ error: "Invalid activity level. Choose between 1-5." });
+  }
+
+  const bmr = calculateBMR(gender.toLowerCase(), weight, height, age);
+  const tdee = calculateTDEE(bmr, activity.multiplier);
+  const recommendations = calorieRecommendations(tdee);
+
   res.json({
-    name: displayName,
-    email: emails?.[0]?.value || null,
-    photo: photos?.[0]?.value || null
+    bmr: Math.round(bmr),
+    tdee: recommendations.maintain,
+    caloriesToLoseWeight: {
+      mild: recommendations.mildLoss,
+      aggressive: recommendations.weightLoss,
+    },
+    caloriesToGainWeight: {
+      mild: recommendations.mildGain,
+      aggressive: recommendations.weightGain,
+    },
+    activityLevel: activity.label,
   });
 });
 
-// Logout route
-app.get('/logout', (req, res) => {
-  req.logout(err => {
-    if (err) {
-      return res.status(500).json({ message: 'Logout failed', error: err });
-    }
-    res.clearCookie('connect.sid');
-    res.json({ message: 'User logged out successfully' });
-  });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).send('Something broke!');
-});
-
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Start server
+app.listen(port, () => {
+  console.log(`🚀 Server running on http://localhost:${port}`);
 });

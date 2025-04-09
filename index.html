@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TDEE Calculator</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(to right, #141e30, #243b55);
+      color: white;
+      min-height: 100vh;
+      padding-top: 4rem;
+    }
+    .form-container {
+      background-color: rgba(255, 255, 255, 0.05);
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    }
+    .results-card {
+      background-color: #ffffff10;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 1.5rem;
+      border-radius: 1rem;
+      margin-top: 2rem;
+    }
+    label {
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1 class="text-center mb-4">TDEE Calculator (US Units)</h1>
+    <div class="row justify-content-center">
+      <div class="col-md-6">
+        <div class="form-container">
+          <form id="tdeeForm">
+            <div class="mb-3">
+              <label for="age" class="form-label">Age</label>
+              <input type="number" class="form-control" id="age" required>
+            </div>
+
+            <div class="mb-3">
+              <label for="gender" class="form-label">Gender</label>
+              <select class="form-select" id="gender" required>
+                <option value="">Choose...</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label for="height" class="form-label">Height (inches)</label>
+              <input type="number" class="form-control" id="height" required>
+            </div>
+
+            <div class="mb-3">
+              <label for="weight" class="form-label">Weight (pounds)</label>
+              <input type="number" class="form-control" id="weight" required>
+            </div>
+
+            <div class="mb-3">
+              <label for="activity" class="form-label">Activity Level</label>
+              <select class="form-select" id="activity" required>
+                <option value="">Choose...</option>
+                <option value="1">Sedentary (little or no exercise)</option>
+                <option value="2">Lightly active (1-3 days/week)</option>
+                <option value="3">Moderately active (3-5 days/week)</option>
+                <option value="4">Very active (6-7 days/week)</option>
+                <option value="5">Super active (hard training or physical job)</option>
+              </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Calculate TDEE</button>
+          </form>
+
+          <div id="results" class="results-card mt-4 d-none">
+            <h4 class="text-center mb-3">Your Results</h4>
+            <p><strong>BMR:</strong> <span id="bmr"></span> calories/day</p>
+            <p><strong>TDEE (Maintain):</strong> <span id="tdee"></span> calories/day</p>
+            <p><strong>Lose Weight:</strong><br>
+              Mild: <span id="mildLoss"></span> | Aggressive: <span id="weightLoss"></span>
+            </p>
+            <p><strong>Gain Weight:</strong><br>
+              Mild: <span id="mildGain"></span> | Aggressive: <span id="weightGain"></span>
+            </p>
+            <p><strong>Activity Level:</strong> <span id="activityLevelText"></span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("tdeeForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const age = document.getElementById("age").value;
+      const gender = document.getElementById("gender").value;
+      const height = document.getElementById("height").value;
+      const weight = document.getElementById("weight").value;
+      const activityLevel = document.getElementById("activity").value;
+
+      const payload = {
+        age: Number(age),
+        gender,
+        height: Number(height),
+        weight: Number(weight),
+        activityLevel
+      };
+
+      try {
+        const res = await fetch("http://localhost:3000/api/tdee", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          alert(data.error);
+        } else {
+          document.getElementById("bmr").textContent = data.bmr;
+          document.getElementById("tdee").textContent = data.tdee;
+          document.getElementById("mildLoss").textContent = data.caloriesToLoseWeight.mild;
+          document.getElementById("weightLoss").textContent = data.caloriesToLoseWeight.aggressive;
+          document.getElementById("mildGain").textContent = data.caloriesToGainWeight.mild;
+          document.getElementById("weightGain").textContent = data.caloriesToGainWeight.aggressive;
+          document.getElementById("activityLevelText").textContent = data.activityLevel;
+
+          document.getElementById("results").classList.remove("d-none");
+        }
+      } catch (err) {
+        alert("Something went wrong. Please check the backend connection.");
+      }
+    });
+  </script>
+
+</body>
+</html>
